@@ -4,9 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>AIコーチ付きナンプレ</title>
-    <!-- PWA用 manifest -->
     <link rel="manifest" href="manifest.json">
-    <!-- ★追加：iPhone（Safari）にアプリアイコンを認識させるための記述 -->
     <link rel="apple-touch-icon" href="images/icon-192.png">
     <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@700&display=swap" rel="stylesheet">
     <style>
@@ -136,6 +134,10 @@
     <div id="menu-screen">
         <h1>AIコーチ付きナンプレ</h1>
         
+        <div id="resume-container" style="display:none; width: 90%; margin-bottom: 20px;">
+            <button onclick="resumeActiveGame()" style="background-color: #27ae60; color: white; border: 4px solid #2ecc71; padding: 15px; font-size: 1.2rem; font-weight: bold; border-radius: 12px; width: 100%; box-shadow: 0 5px 0px #2ecc71; cursor: pointer; transition: all 0.1s;">▶ プレイ中のデータから再開する</button>
+        </div>
+
         <div class="ticket-info-area">
             <div class="ticket-count">🎟️ ヒントチケット: <span id="ticket-display">0</span>回分</div>
             <button class="ticket-buy-btn" onclick="purchaseHintTicket()">補充する(100円)</button>
@@ -158,7 +160,6 @@
 
         <div id="stage-grid-area" class="stage-grid-container">
             <div class="stage-grid" id="stage-grid"></div>
-            <!-- ここにあった危険な文字を削除し、安全な方法で追加するように修正しました -->
         </div>
         
         <button class="reset-btn" onclick="resetSaveData()">🔄 セーブデータをリセット（テスト用）</button>
@@ -203,10 +204,10 @@
     <script src="stages_advanced.js"></script><script src="stages_master.js"></script>
 
     <script>
-        // PWAのキャッシュを最新(v2)にするための記述
         if ('serviceWorker' in navigator) { window.addEventListener('load', () => { navigator.serviceWorker.register('./sw.js').catch(e => console.log('SW登録スキップ')); }); }
 
-        const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzyvzJeCKPbw8Y2Phz5hAcKWovpk3JiPVu-_Ij4noKMCv7z7md-31o2tROvd0MVmTYjGg/exec";
+        // ★新しいGASのURLに更新しました
+        const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbz8QSamnvNTVYxntMMXYOSGD5N-8jX7C4btmiliztAartPgbd-IxZnRhmwe3UoRNiTNnw/exec";
         
         const STRIPE_LINKS = {
             hint: "https://buy.stripe.com/test_00wfZj6KO1KXaWWdkRfMA00",
@@ -236,9 +237,27 @@
         function saveGameData() { localStorage.setItem('sudokuAppSave', JSON.stringify(savedData)); }
         function updateTicketDisplay() { document.getElementById('ticket-display').innerText = savedData.hintTickets || 0; }
 
+        function saveCurrentGame() {
+            if (isCleared || !stageTitle.innerText) return;
+            const totalSeconds = elapsedSecondsOffset + Math.floor((Date.now() - startTime) / 1000);
+            savedData.activeGame = {
+                title: stageTitle.innerText, originalBoard: currentOriginalBoard, currentBoard: currentBoardData,
+                difficulty: currentDifficulty, elapsedSeconds: totalSeconds, freeHints: freeHintsRemaining
+            };
+            saveGameData();
+        }
+
+        function clearCurrentGame() {
+            delete savedData.activeGame;
+            saveGameData();
+        }
+
         window.onload = () => {
             const urlParams = new URLSearchParams(window.location.search);
+            let cameFromPayment = false;
+
             if (urlParams.get('payment_success') === 'true') {
+                cameFromPayment = true;
                 const pack = urlParams.get('pack');
                 if (pack === 'hint') {
                     savedData.hintTickets = (savedData.hintTickets || 0) + 100;
@@ -253,12 +272,8 @@
 
             updateTicketDisplay();
 
-            if (savedData.activeGame) {
-                const active = savedData.activeGame;
-                currentDifficulty = active.difficulty;
-                restoreStage(active.title, active.originalBoard, active.currentBoard, active.elapsedSeconds, active.freeHints);
-                delete savedData.activeGame;
-                saveGameData();
+            if (cameFromPayment && savedData.activeGame) {
+                resumeActiveGame();
             } else {
                 initMenu();
             }
@@ -317,7 +332,6 @@
                 else if (isCleared) { btn.classList.add('cleared'); btn.innerHTML = `<span class="stage-num">${i}</span><span class="best-time-label">${formatTime(savedData.bestTimes[stageFullName])}</span>`; }
                 else { btn.innerHTML = `<span>${i}</span>`; }
                 
-                // バグ修正：確実にクリックイベントが発動するようになりました
                 btn.onclick = () => {
                     try {
                         try { playClickSound(); } catch(e){}
@@ -337,7 +351,6 @@
                 grid.appendChild(btn);
             }
             
-            // ★原因だったバグ修正：DOMを破壊せずに安全に文字を追加する
             const comingSoon = document.createElement('div');
             comingSoon.style.cssText = "grid-column:1/-1; text-align:center; padding:20px 0 10px 0; color:rgba(255,255,255,0.9); font-weight:bold;";
             comingSoon.innerHTML = `🔒 ${maxStage + 1}〜 Coming Soon...<br><span style="font-size:0.85rem;font-weight:normal;">さらなる問題を現在作成中です！</span><br><br><span style="font-size:0.8rem;color:rgba(255,255,255,0.8);">※データはこのブラウザに保存されます。履歴を消去するとデータも消えます。</span>`;
@@ -360,38 +373,48 @@
         }
 
         function purchaseHintDuringGame() {
-            const msg = "ヒント枠がありません。\n「AIヒントチケット（100回分/100円）」を購入しますか？\n\n※決済後、現在の盤面から自動的に再開されます。";
+            const msg = "ヒント枠がありません。\n「AIヒントチケット（100回分/100円）」を購入しますか？\n\n※決済後、この盤面から自動的に再開されます。";
             if (confirm(msg)) {
-                const totalSeconds = elapsedSecondsOffset + Math.floor((Date.now() - startTime) / 1000);
-                savedData.activeGame = {
-                    title: stageTitle.innerText, originalBoard: currentOriginalBoard, currentBoard: currentBoardData,
-                    difficulty: currentDifficulty, elapsedSeconds: totalSeconds, freeHints: freeHintsRemaining
-                };
-                saveGameData();
+                saveCurrentGame();
                 window.location.href = STRIPE_LINKS.hint;
             }
         }
 
-        function initMenu() { updateTicketDisplay(); renderStageGrid(); }
+        function initMenu() { 
+            updateTicketDisplay(); 
+            renderStageGrid(); 
+            document.getElementById('resume-container').style.display = savedData.activeGame ? 'block' : 'none';
+        }
+
+        function resumeActiveGame() {
+            try { playClickSound(); } catch(e){}
+            if (savedData.activeGame) {
+                const active = savedData.activeGame;
+                currentDifficulty = active.difficulty;
+                restoreStage(active.title, active.originalBoard, active.currentBoard, active.elapsedSeconds, active.freeHints);
+            }
+        }
 
         function selectCoach(type) { try { playClickSound(); } catch(e){} currentCoach = type; document.querySelectorAll('.coach-btn').forEach(b => b.classList.remove('active')); document.getElementById(`coach-${type}`).classList.add('active'); coachImage.src = coachImages[currentCoach].normal; }
         function setCoachState(state) { stopHappyAnimation(); if(state==='happy'){ let a=true; coachImage.src=coachImages[currentCoach].happy_a; happyAnimationInterval=setInterval(()=>{a=!a;coachImage.src=a?coachImages[currentCoach].happy_a:coachImages[currentCoach].happy_b;},500); } else { coachImage.src=coachImages[currentCoach][state]; } aiCharacterArea.className = 'ai-character-area ' + state; }
         function stopHappyAnimation() { if(happyAnimationInterval){ clearInterval(happyAnimationInterval); happyAnimationInterval=null; } }
 
         function startStage(title, boardData) {
+            if (savedData.activeGame && savedData.activeGame.title !== title) {
+                if (!confirm("プレイ中の中断データがあります。新しく始めると上書きされますがよろしいですか？")) return;
+            }
             try { playStartSound(); } catch(e){} 
             playSessionId++; isThinking = false; isCleared = false; selectedCell = null;
             
             let safeBoard = boardData;
-            if (!safeBoard || !Array.isArray(safeBoard) || safeBoard.length !== 9) {
-                safeBoard = testBoard;
-            }
+            if (!safeBoard || !Array.isArray(safeBoard) || safeBoard.length !== 9) { safeBoard = testBoard; }
             
             currentOriginalBoard = JSON.parse(JSON.stringify(safeBoard)); 
             currentBoardData = JSON.parse(JSON.stringify(safeBoard));
             stageTitle.innerText = title;
             freeHintsRemaining = 3; elapsedSecondsOffset = 0;
             setupGameUI();
+            saveCurrentGame();
         }
 
         function restoreStage(title, original, current, elapsed, freeH) {
@@ -408,7 +431,13 @@
             menuScreen.style.display = 'none'; gameScreen.style.display = 'flex';
         }
 
-        function backToMenu() { try { playClickSound(); } catch(e){} stopTimer(); stopHappyAnimation(); playSessionId++; isThinking = false; gameScreen.style.display = 'none'; menuScreen.style.display = 'flex'; updateTicketDisplay(); renderStageGrid(); }
+        function backToMenu() { 
+            try { playClickSound(); } catch(e){} 
+            if (!isCleared) saveCurrentGame();
+            stopTimer(); stopHappyAnimation(); playSessionId++; isThinking = false; 
+            gameScreen.style.display = 'none'; menuScreen.style.display = 'flex'; 
+            initMenu(); 
+        }
 
         function startTimer() {
             stopTimer(); startTime = Date.now();
@@ -436,7 +465,9 @@
             if (isCleared || !selectedCell || isThinking) return;
             const r = selectedCell.r, c = selectedCell.c; currentBoardData[r][c] = num;
             document.getElementById(`cell-${r}-${c}`).innerText = num === 0 ? '' : num;
-            checkBoardErrors() ? playErrorSound() : playClickSound(); checkClear();
+            checkBoardErrors() ? playErrorSound() : playClickSound(); 
+            saveCurrentGame();
+            checkClear();
         }
 
         function checkBoardErrors() {
@@ -457,6 +488,7 @@
             let isFull = true; for(let r=0;r<9;r++) for(let c=0;c<9;c++) if(currentBoardData[r][c]===0) isFull=false;
             if (isFull && document.querySelectorAll('.error').length === 0 && !isCleared) {
                 isCleared = true; stopTimer(); document.querySelectorAll('.selected').forEach(c => c.classList.remove('selected')); selectedCell = null;
+                clearCurrentGame();
                 setCoachState('happy'); playClearSound();
                 const title = stageTitle.innerText, tSec = elapsedSecondsOffset + Math.floor((Date.now() - startTime) / 1000);
                 savedData.cleared[title] = true; if (!savedData.bestTimes[title] || tSec < savedData.bestTimes[title]) savedData.bestTimes[title] = tSec;
@@ -496,6 +528,7 @@
                     const r = parseInt(result.hint.target_row) - 1, c = parseInt(result.hint.target_col) - 1;
                     hintArea.innerText = `コーチのヒント：\n${result.hint.explanation}`; hintArea.style.display = 'block';
                     document.getElementById(`cell-${r}-${c}`).classList.add('highlight'); selectCell(r, c);
+                    saveCurrentGame();
                 } else {
                     hintArea.innerText = `ヒントを取得できませんでした: ${result.error?.message || '不明なエラー'}`; hintArea.style.display = 'block';
                 }

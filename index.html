@@ -8,8 +8,8 @@
     <link rel="apple-touch-icon" href="images/icon-192.png">
     <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@700&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'M PLUS Rounded 1c', sans-serif; background-color: #fdf6e3; color: #4a4a4a; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; min-height: 100vh; margin: 0; padding-top: 15px; touch-action: manipulation; }
-        #menu-screen, #game-screen { display: flex; flex-direction: column; align-items: center; width: 100%; max-width: 500px; }
+        body { font-family: 'M PLUS Rounded 1c', sans-serif; background-color: #fdf6e3; color: #4a4a4a; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; min-height: 100vh; margin: 0; padding-top: 15px; touch-action: manipulation; position: relative; }
+        #menu-screen, #game-screen { display: flex; flex-direction: column; align-items: center; width: 100%; max-width: 500px; position: relative; }
         h1 { color: #d35400; font-size: 2rem; margin-bottom: 10px; text-align: center; text-shadow: 2px 2px 0px #f39c12; letter-spacing: 2px; }
         
         .ticket-info-area { background-color: #fff; border: 3px solid #f1c40f; border-radius: 10px; padding: 10px 15px; display: flex; justify-content: space-between; align-items: center; width: 90%; margin-bottom: 20px; box-shadow: 0 4px 0px rgba(0,0,0,0.05); box-sizing: border-box; }
@@ -92,9 +92,12 @@
         
         .back-btn { background-color: #95a5a6; color: white; border: 4px solid #7f8c8d; padding: 12px; font-size: 1rem; font-weight: bold; border-radius: 12px; cursor: pointer; width: 80%; box-shadow: 0 4px 0px #7f8c8d; }
         .back-btn:active { transform: translateY(4px); box-shadow: 0 0px 0px #7f8c8d; }
-        .reset-btn { font-size: 0.8rem; color: #999; text-decoration: underline; cursor: pointer; margin-top: 15px; background: none; border: none; }
+        
+        /* 引継ぎ用ボタン（右上に配置） */
+        .transfer-mini-btn { position: absolute; top: 10px; right: 15px; font-size: 1.2rem; background: #fff; border: 2px solid #ccc; border-radius: 50%; width: 35px; height: 35px; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 2px 0px #ccc; }
+        .transfer-mini-btn:active { transform: translateY(2px); box-shadow: 0 0px 0px #ccc; }
 
-        #clear-modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+        #clear-modal, #transfer-modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 1000; }
         .modal-content { background-color: #fff; padding: 30px; border-radius: 20px; text-align: center; width: 85%; max-width: 320px; border: 6px solid #f1c40f; box-shadow: 0 10px 0px #f39c12; }
         .modal-title { font-size: 2.2rem; color: #e74c3c; margin-top: 0; margin-bottom: 15px; font-weight: bold; text-shadow: 2px 2px 0px #f1c40f; }
         .modal-time { font-size: 1.4rem; color: #2c3e50; margin-bottom: 25px; font-weight: bold; }
@@ -103,7 +106,7 @@
 
         @media screen and (max-width: 500px), screen and (max-height: 850px) {
             body { padding-top: 5px; }
-            .ticket-info-area { padding: 8px 10px; margin-bottom: 10px; width: 95%; }
+            .ticket-info-area { padding: 8px 10px; margin-bottom: 10px; width: 95%; margin-top: 35px; }
             .ticket-count { font-size: 1rem; }
             .ticket-buy-btn { font-size: 0.9rem; padding: 6px 10px; }
             .top-info-wrapper { flex-direction: row; align-items: stretch; margin-bottom: 10px; width: 95%; gap: 10px; }
@@ -126,13 +129,16 @@
             .tab-btn { font-size: 0.9rem; padding: 8px 2px; }
             .stage-grid-container { padding: 10px; max-height: 350px; }
             .stage-btn { font-size: 1.4rem; }
+            .transfer-mini-btn { top: 5px; right: 10px; width: 30px; height: 30px; font-size: 1rem; }
         }
     </style>
 </head>
 <body>
 
     <div id="menu-screen">
-        <h1>AIコーチ付きナンプレ</h1>
+        <button class="transfer-mini-btn" onclick="openTransferModal()" title="データの引継ぎ">⚙️</button>
+        
+        <h1 style="margin-top: 15px;">AIコーチ付きナンプレ</h1>
         
         <div id="resume-container" style="display:none; width: 90%; margin-bottom: 20px;">
             <button onclick="resumeActiveGame()" style="background-color: #27ae60; color: white; border: 4px solid #2ecc71; padding: 15px; font-size: 1.2rem; font-weight: bold; border-radius: 12px; width: 100%; box-shadow: 0 5px 0px #2ecc71; cursor: pointer; transition: all 0.1s;">▶ プレイ中のデータから再開する</button>
@@ -161,8 +167,6 @@
         <div id="stage-grid-area" class="stage-grid-container">
             <div class="stage-grid" id="stage-grid"></div>
         </div>
-        
-        <button class="reset-btn" onclick="resetSaveData()">🔄 セーブデータをリセット（テスト用）</button>
     </div>
 
     <div id="game-screen" style="display: none;">
@@ -200,15 +204,32 @@
         </div>
     </div>
 
+    <div id="transfer-modal" style="display: none; z-index: 2000;">
+        <div style="background-color: #fff; padding: 20px; border-radius: 15px; width: 90%; max-width: 350px; text-align: center; border: 4px solid #3498db; box-shadow: 0 10px 0px rgba(0,0,0,0.2);">
+            <h3 style="margin-top: 0; color: #2980b9;">データの引継ぎ</h3>
+            <p style="font-size: 0.85rem; color: #666; text-align: left; margin-bottom: 10px;">ブラウザ版からホーム画面版へデータを移す場合、下のコードをコピーして貼り付けてください。</p>
+            
+            <textarea id="export-code" style="width: 100%; height: 60px; margin-bottom: 5px; font-size: 0.7rem;" readonly></textarea>
+            <button onclick="copyTransferCode()" style="background: #3498db; color: #fff; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; margin-bottom: 15px; width: 100%;">コピーする</button>
+            
+            <hr style="border: 1px dashed #ccc; margin-bottom: 15px;">
+            
+            <textarea id="import-code" style="width: 100%; height: 60px; margin-bottom: 5px; font-size: 0.7rem;" placeholder="ここに引継ぎコードを貼り付け"></textarea>
+            <button onclick="importTransferCode()" style="background: #e67e22; color: #fff; border: none; padding: 10px 15px; border-radius: 5px; cursor: pointer; font-weight: bold; width: 100%; margin-bottom: 10px;">データを復元する</button>
+            
+            <button onclick="document.getElementById('transfer-modal').style.display='none'" style="background: #95a5a6; color: #fff; border: none; padding: 8px; border-radius: 5px; cursor: pointer; width: 100%;">閉じる</button>
+        </div>
+    </div>
+
     <script src="stages_beginner.js"></script><script src="stages_intermediate.js"></script>
     <script src="stages_advanced.js"></script><script src="stages_master.js"></script>
 
     <script>
         if ('serviceWorker' in navigator) { window.addEventListener('load', () => { navigator.serviceWorker.register('./sw.js').catch(e => console.log('SW登録スキップ')); }); }
 
-        // ★新しいGASのURLに更新しました
         const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbz8QSamnvNTVYxntMMXYOSGD5N-8jX7C4btmiliztAartPgbd-IxZnRhmwe3UoRNiTNnw/exec";
         
+        // ★本番環境用のリンクに差し替えてください
         const STRIPE_LINKS = {
             hint: "https://buy.stripe.com/test_00wfZj6KO1KXaWWdkRfMA00",
             beginner: "https://buy.stripe.com/test_4gM5kF0mq3T5ghgeoVfMA01",
@@ -299,6 +320,7 @@
         function playErrorSound() { playTone(150, 'sawtooth', 0.3, 0.15); }
         function playStartSound() { playTone(400, 'square', 0.1, 0.05); setTimeout(() => playTone(600, 'square', 0.15, 0.05), 100); }
         function playClearSound() { playTone(400, 'square', 0.1, 0.1); setTimeout(() => playTone(400, 'square', 0.1, 0.1), 150); setTimeout(() => playTone(400, 'square', 0.1, 0.1), 300); setTimeout(() => playTone(600, 'square', 0.4, 0.1), 450); }
+        function playHintReadySound() { playTone(880, 'sine', 0.1, 0.1); setTimeout(() => playTone(1318, 'sine', 0.2, 0.1), 100); }
 
         function formatTime(totalSeconds) { const m = Math.floor(totalSeconds / 60).toString().padStart(2, '0'), s = (totalSeconds % 60).toString().padStart(2, '0'); return `${m}:${s}`; }
 
@@ -507,6 +529,12 @@
         async function getHint() {
             if (isThinking) return; try { playClickSound(); } catch(e){}
             
+            if (document.querySelectorAll('.error').length > 0) {
+                hintArea.innerText = "コーチのヒント：\nおや？盤面にルール違反（赤くなっているマス）があるようです！\nまずはそこを修正してから聞いてくださいね。";
+                hintArea.style.display = 'block';
+                return;
+            }
+
             if (freeHintsRemaining <= 0 && (!savedData.hintTickets || savedData.hintTickets <= 0)) {
                 purchaseHintDuringGame(); return; 
             }
@@ -522,6 +550,8 @@
                 if (currentSession !== playSessionId) return; 
 
                 if (result.success && result.hint) {
+                    playHintReadySound(); // ピコーンと鳴らす
+                    
                     if (freeHintsRemaining > 0) { freeHintsRemaining--; } 
                     else { savedData.hintTickets--; saveGameData(); updateTicketDisplay(); }
                     
@@ -542,7 +572,41 @@
         }
 
         hintBtn.addEventListener('click', getHint);
-        function resetSaveData() { if(confirm("【開発用】セーブデータをリセットしますか？")) { localStorage.removeItem('sudokuAppSave'); location.href = location.pathname; } }
+
+        // 引継ぎ機能の処理
+        function openTransferModal() {
+            try { playClickSound(); } catch(e){}
+            const safeString = btoa(encodeURIComponent(JSON.stringify(savedData)));
+            document.getElementById('export-code').value = safeString;
+            document.getElementById('transfer-modal').style.display = 'flex';
+        }
+
+        function copyTransferCode() {
+            const copyText = document.getElementById('export-code');
+            copyText.select();
+            document.execCommand("copy");
+            alert("引継ぎコードをコピーしました！");
+        }
+
+        function importTransferCode() {
+            const importText = document.getElementById('import-code').value.trim();
+            if (!importText) return;
+            if (confirm("現在のデータは上書きされます。復元してもよろしいですか？")) {
+                try {
+                    const decodedData = JSON.parse(decodeURIComponent(atob(importText)));
+                    if (decodedData && typeof decodedData === 'object') {
+                        savedData = decodedData;
+                        saveGameData();
+                        alert("データの復元に成功しました！");
+                        location.reload();
+                    } else {
+                        throw new Error("不正なデータです");
+                    }
+                } catch (e) {
+                    alert("コードが間違っているか、データが壊れています。");
+                }
+            }
+        }
     </script>
 </body>
 </html>

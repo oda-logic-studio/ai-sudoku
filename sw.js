@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ai-sudoku-v7';
+const CACHE_NAME = 'ai-sudoku-v8';
 
 self.addEventListener('install', (event) => {
   // ★追加：新しいバージョンが見つかったら、即座に更新を適用する

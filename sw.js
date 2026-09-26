@@ -1,7 +1,7 @@
-const CACHE_NAME = 'ai-sudoku-v10]';
+const CACHE_NAME = 'ai-sudoku-v11';
 
 self.addEventListener('install', (event) => {
-  // ★追加：新しいバージョンが見つかったら、即座に更新を適用する
+  // 新しいバージョンが見つかったら、待機状態をスキップして即インストール
   self.skipWaiting();
   
   event.waitUntil(
@@ -15,7 +15,10 @@ self.addEventListener('install', (event) => {
 });
 
 self.addEventListener('activate', (event) => {
-  // ★追加：古いキャッシュ（記憶）を完全にゴミ箱に捨てる処理
+  // インストールされた新しいService Workerに、即座にコントロールを握らせる
+  event.waitUntil(self.clients.claim());
+
+  // 古いキャッシュを完全に削除
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
@@ -25,7 +28,7 @@ self.addEventListener('activate', (event) => {
           }
         })
       );
-    }).then(() => self.clients.claim())
+    })
   );
 });
 

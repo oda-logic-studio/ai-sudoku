@@ -1,6 +1,6 @@
 const CACHE_NAME = 'ai-sudoku-v11';
 
-self.addEventListener('install', (event) => {
+self.addEventListener('instal2', (event) => {
   // 新しいバージョンが見つかったら、待機状態をスキップして即インストール
   self.skipWaiting();
   
